@@ -46,13 +46,21 @@ required.
 Use `create_app(infer=...)` in [main.py](main.py) to supply a backend. The
 callback receives the server's `PreparedRequest`, including the rendered
 prompt, inference options, and processed images, and produces an asynchronous
-iterator of `InferenceChunk` values. The server's stream processor has no
-tokenizer, so the callback must produce `text` chunks: a `tokens` chunk fails
-the response, and usage does not count `reasoning_tokens`.
+iterator of `InferenceChunk` values.
+
+Pass `create_app(..., tokenizer=...)` to let the callback produce `tokens`
+chunks: the stream processor decodes them, which also lets it report
+`completion_tokens_details.reasoning_tokens` from thinking segments. Without a
+tokenizer the callback must produce `text` chunks; a `tokens` chunk fails the
+response and usage does not count `reasoning_tokens`.
 `inference_options.max_tokens` is `None` when the request sets none; a backend
 that encodes the prompt resolves the value to send with
 `conversation_request.resolve_max_tokens(prompt_tokens, context_limit)`, where
 `prompt_tokens` adds `image_token_adjustment` to the encoded token count.
+
+A complete vLLM backend, including token-level streaming, images, and usage
+handling, lives in [vllm.py](vllm.py); see [../docs/vllm-backend.md](../docs/vllm-backend.md)
+for setup and the small vLLM frontend patch needed for images.
 
 Use `create_app(options=...)` to change the Rust conversion options, starting
 from `conversion_options()` in [main.py](main.py). `conversion_options()` drops

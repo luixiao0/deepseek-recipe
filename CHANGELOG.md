@@ -8,6 +8,18 @@ minor version can contain incompatible changes.
 
 ## Unreleased
 
+### Added
+
+- `server-py/vllm.py`, a vLLM backend for the Python example server, and
+  `docs/vllm-backend.md`. It completes the rendered prompt on
+  `POST /v1/completions`, streams generated token ids, forwards preprocessed
+  images through the completion request's `multi_modal_data` extension, and
+  reports prompt usage, cache hits, and `system_fingerprint`.
+- `create_app(..., tokenizer=...)` in the Python example server. With a
+  tokenizer the inference callback may emit `tokens` chunks; the stream
+  processor decodes them and reports
+  `completion_tokens_details.reasoning_tokens`.
+
 ## 0.2.0 - 2026-10-20
 
 This release changes the public API of every crate and of the Python package.

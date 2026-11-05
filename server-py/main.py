@@ -31,6 +31,7 @@ from deepseek_recipe import (
     ResponsesResponse,
     SpecialToken,
     StreamProcessor,
+    Tokenizer,
 )
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -167,13 +168,17 @@ async def mock_inference(request: PreparedRequest) -> AsyncIterator[InferenceChu
 
 
 async def response_body(
-    request: PreparedRequest, infer: Inference
+    request: PreparedRequest, infer: Inference, tokenizer: Tokenizer | None = None
 ) -> AsyncIterator[str]:
     request_type, response_type = PROTOCOL_TYPES[request.protocol]
     response_id = str(uuid4())
     model = request.model or "deepseek-flash"
     generator = request_type.chunk_generator(request.conversation_request, response_id, model)
-    processor = StreamProcessor(generator, request.conversation_request.parsing_options)
+    processor = StreamProcessor(
+        generator,
+        request.conversation_request.parsing_options,
+        tokenizer,
+    )
     response = None if request.stream else response_type(response_id, model, int(time()), 0, 0)
     inference = None
     try:
@@ -215,9 +220,17 @@ def sse_frame(event: str | None, data: str) -> str:
 
 
 def create_app(
-    infer: Inference = mock_inference, *, options: ConversionOptions | None = None
+    infer: Inference = mock_inference,
+    *,
+    options: ConversionOptions | None = None,
+    tokenizer: Tokenizer | None = None,
 ) -> FastAPI:
     """Create a server using an asynchronous inference iterator.
+
+    `tokenizer`, when supplied, lets the inference callback emit `tokens`
+    chunks: the stream processor decodes them and reports
+    `completion_tokens_details.reasoning_tokens` from thinking segments.
+    Without it the callback must emit `text` chunks.
 
     `options` is passed to every request conversion. Conversion resolves the
     model version from the request's model name through its
@@ -249,7 +262,7 @@ def create_app(
         async def handler(request: Request) -> Response:
             body = await request.body()
             prepared = await run_in_threadpool(prepare_request, protocol, body, options=options)
-            output = response_body(prepared, infer)
+            output = response_body(prepared, infer, tokenizer)
             if prepared.stream:
                 return InferenceStreamingResponse(output, media_type="text/event-stream")
             content = "".join([part async for part in output])
